@@ -38,10 +38,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
   if (typeof EventEmitter !== "object" && typeof require === "function") {
     this.EventEmitter = require('wolfy87-eventemitter');
+  } else {
+    this.EventEmitter = EventEmitter;
   }
 
   if (typeof $ !== "object" && typeof require === "function") {
     this.$ = require('jquery');
+  } else {
+    this.$ = $;
   }
 
 }).call(this);
@@ -119,9 +123,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         OfferToReceiveVideo: true
       }
     };
-    if (palava.browser.isMozilla()) {
-      constraints.mandatory.MozDontOfferDataChannel = true;
-    }
     return constraints;
   };
 
@@ -549,10 +550,42 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       this.channel.onclose = function() {
         return _this.emit('close');
       };
+      this.send_buffer = [];
     }
 
-    DataChannel.prototype.send = function(data) {
-      return this.channel.send(data);
+    DataChannel.prototype.send = function(data, cb) {
+      var actual_send,
+        _this = this;
+      this.send_buffer.push([data, cb]);
+      if (this.send_buffer.length === 1) {
+        actual_send = function() {
+          var e, _ref, _results;
+          if (_this.channel.readyState !== 'open') {
+            return;
+          }
+          try {
+            _results = [];
+            while (_this.send_buffer.length) {
+              _ref = _this.send_buffer[0], data = _ref[0], cb = _ref[1];
+              _this.channel.send(data);
+              try {
+                if (typeof cb === "function") {
+                  cb();
+                }
+              } catch (_error) {
+                e = _error;
+                console.log('Exception in write callback', e);
+              }
+              _results.push(_this.send_buffer.shift());
+            }
+            return _results;
+          } catch (_error) {
+            console.log('erreur');
+            return setTimeout(actual_send, 5);
+          }
+        };
+        return actual_send();
+      }
     };
 
     return DataChannel;
@@ -682,7 +715,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             options = _ref[label];
             channel = this.peerConnection.createDataChannel(label, options);
             channel.onopen = function() {
-              return registerChannel(channel);
+              return registerChannel(this);
             };
           }
         } else {
