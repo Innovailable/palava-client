@@ -541,6 +541,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   palava.DataChannel = (function(_super) {
     __extends(DataChannel, _super);
 
+    DataChannel.prototype.MAX_BUFFER = 1024 * 1024;
+
     function DataChannel(channel) {
       var _this = this;
       this.channel = channel;
@@ -549,6 +551,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       };
       this.channel.onclose = function() {
         return _this.emit('close');
+      };
+      this.channel.onerror = function(e) {
+        return _this.emit('error', e);
       };
       this.send_buffer = [];
     }
@@ -559,29 +564,33 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       this.send_buffer.push([data, cb]);
       if (this.send_buffer.length === 1) {
         actual_send = function() {
-          var e, _ref, _results;
+          var e, _ref;
           if (_this.channel.readyState !== 'open') {
+            console.log("Not sending when not open!");
             return;
           }
-          try {
-            _results = [];
-            while (_this.send_buffer.length) {
-              _ref = _this.send_buffer[0], data = _ref[0], cb = _ref[1];
-              _this.channel.send(data);
-              try {
-                if (typeof cb === "function") {
-                  cb();
-                }
-              } catch (_error) {
-                e = _error;
-                console.log('Exception in write callback', e);
-              }
-              _results.push(_this.send_buffer.shift());
+          while (_this.send_buffer.length) {
+            if (_this.channel.bufferedAmount > _this.MAX_BUFFER) {
+              setTimeout(actual_send, 1);
+              return;
             }
-            return _results;
-          } catch (_error) {
-            console.log('erreur');
-            return setTimeout(actual_send, 5);
+            _ref = _this.send_buffer[0], data = _ref[0], cb = _ref[1];
+            try {
+              _this.channel.send(data);
+            } catch (_error) {
+              e = _error;
+              setTimeout(actual_send, 1);
+              return;
+            }
+            try {
+              if (typeof cb === "function") {
+                cb();
+              }
+            } catch (_error) {
+              e = _error;
+              console.log('Exception in write callback:', e);
+            }
+            _this.send_buffer.shift();
           }
         };
         return actual_send();
