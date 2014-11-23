@@ -218,6 +218,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     };
   }
 
+  palava.browser.attachPeer = function(element, peer) {
+    var attach;
+    attach = function() {
+      palava.browser.attachMediaStream(element, peer.getStream());
+      if (peer.isLocal()) {
+        element.attr('muted', true);
+      }
+      return element[0].play();
+    };
+    if (peer.getStream()) {
+      return attach();
+    } else {
+      return peer.on('stream_ready', function() {
+        return attach();
+      });
+    }
+  };
+
 }).call(this);
 (function() {
   var palava,
@@ -619,6 +637,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       this.mozillaCheckAddStream = __bind(this.mozillaCheckAddStream, this);
       this.oaError = __bind(this.oaError, this);
       this.sdpSender = __bind(this.sdpSender, this);
+      this.sendMessage = __bind(this.sendMessage, this);
       this.sendAnswer = __bind(this.sendAnswer, this);
       this.sendOffer = __bind(this.sendOffer, this);
       this.setupRoom = __bind(this.setupRoom, this);
@@ -770,6 +789,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         _this.status = msg.status;
         return _this.emit('update');
       });
+      this.distributor.on('message', function(msg) {
+        return _this.emit('message', msg.data);
+      });
       return this.distributor;
     };
 
@@ -814,6 +836,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     RemotePeer.prototype.sendAnswer = function() {
       this.peerConnection.createAnswer(this.sdpSender('answer'), this.oaError, palava.browser.getConstraints());
       return this.mozillaCheckAddStream();
+    };
+
+    RemotePeer.prototype.sendMessage = function(data) {
+      return this.distributor.send({
+        event: 'message',
+        data: data
+      });
     };
 
     RemotePeer.prototype.sdpSender = function(event) {
