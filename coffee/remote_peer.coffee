@@ -199,6 +199,8 @@ class palava.RemotePeer extends palava.Peer
     @peerConnection.createAnswer @sdpSender('answer'), @oaError, palava.browser.getConstraints()
     @mozillaCheckAddStream()
 
+  # Sends a message through the signaling server to the peer
+  #
   sendMessage: (data) =>
     @distributor.send
       event: 'message'
