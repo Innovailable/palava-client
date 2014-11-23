@@ -1,7 +1,7 @@
 {
     "name": "palava-client",
-    "description": "JavaScript library for WebRTC",
-    "version": "1.0.0-3",
+    "description": "CoffeeScript library for WebRTC",
+    "version": "1.2.0-pre",
     "author": {
         "name": "palava e. V.",
         "email": "contact@palava.tv",
@@ -14,7 +14,7 @@
         }
     ],
     "dependencies": {
-        "wolfy87-eventemitter": "~4.2.3",
+        "wolfy87-eventemitter": "~4.2.9",
         "jquery": "~2.1.1"
     },
     "browser": "./palava.js",
