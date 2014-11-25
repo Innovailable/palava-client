@@ -272,10 +272,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         video: false,
         audio: false
       };
-      if (this.stream.getVideoTracks().length > 0) {
+      if (this.stream && this.stream.getVideoTracks().length > 0) {
         this.config.video = true;
       }
-      if (this.stream.getAudioTracks().length > 0) {
+      if (this.stream && this.stream.getAudioTracks().length > 0) {
         return this.config.audio = true;
       }
     };
@@ -316,14 +316,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 }).call(this);
 (function() {
-  var palava;
+  var palava,
+    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
   palava = this.palava;
 
   palava.Identity = (function() {
     function Identity(o) {
+      this.getStatus = __bind(this.getStatus, this);
+      this.getName = __bind(this.getName, this);
       this.userMediaConfig = o.userMediaConfig;
-      this.name = o.name;
+      this.status = o.status || {};
+      this.status.name = o.name;
     }
 
     Identity.prototype.newUserMedia = function() {
@@ -332,6 +336,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     Identity.prototype.getName = function() {
       return this.name;
+    };
+
+    Identity.prototype.getStatus = function() {
+      return this.status;
     };
 
     return Identity;
@@ -488,10 +496,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     LocalPeer.prototype.hasAudio = function() {
       var stream;
-      if (stream = this.getStream) {
-        return stream.getAudioTracks.length() > 0;
+      if (stream = this.getStream()) {
+        return stream.getAudioTracks().length > 0;
+      } else {
+        return false;
       }
-      return false;
     };
 
     LocalPeer.prototype.toggleMute = function() {
@@ -571,6 +580,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   palava = this.palava;
 
   palava.DataChannel = (function(_super) {
+    var actualSend;
+
     __extends(DataChannel, _super);
 
     DataChannel.prototype.MAX_BUFFER = 1024 * 1024;
@@ -592,46 +603,44 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           return _this.emit('error', e);
         };
       })(this);
-      this.send_buffer = [];
+      this.sendBuffer = [];
     }
 
     DataChannel.prototype.send = function(data, cb) {
-      var actual_send;
-      this.send_buffer.push([data, cb]);
-      if (this.send_buffer.length === 1) {
-        actual_send = (function(_this) {
-          return function() {
-            var e, _ref;
-            if (_this.channel.readyState !== 'open') {
-              console.log("Not sending when not open!");
-              return;
-            }
-            while (_this.send_buffer.length) {
-              if (_this.channel.bufferedAmount > _this.MAX_BUFFER) {
-                setTimeout(actual_send, 1);
-                return;
-              }
-              _ref = _this.send_buffer[0], data = _ref[0], cb = _ref[1];
-              try {
-                _this.channel.send(data);
-              } catch (_error) {
-                e = _error;
-                setTimeout(actual_send, 1);
-                return;
-              }
-              try {
-                if (typeof cb === "function") {
-                  cb();
-                }
-              } catch (_error) {
-                e = _error;
-                console.log('Exception in write callback:', e);
-              }
-              _this.send_buffer.shift();
-            }
-          };
-        })(this);
-        return actual_send();
+      this.sendBuffer.push([data, cb]);
+      if (this.sendBuffer.length === 1) {
+        return this.actualSend();
+      }
+    };
+
+    actualSend = function() {
+      var cb, data, e, _ref;
+      if (DataChannel.channel.readyState !== 'open') {
+        console.log("Not sending when not open!");
+        return;
+      }
+      while (DataChannel.sendBuffer.length) {
+        if (DataChannel.channel.bufferedAmount > DataChannel.MAX_BUFFER) {
+          setTimeout(DataChannel.actualSend, 1);
+          return;
+        }
+        _ref = DataChannel.sendBuffer[0], data = _ref[0], cb = _ref[1];
+        try {
+          DataChannel.channel.send(data);
+        } catch (_error) {
+          e = _error;
+          setTimeout(DataChannel.actualSend, 1);
+          return;
+        }
+        try {
+          if (typeof cb === "function") {
+            cb();
+          }
+        } catch (_error) {
+          e = _error;
+          console.log('Exception in write callback:', e);
+        }
+        DataChannel.sendBuffer.shift();
       }
     };
 
@@ -645,10 +654,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
-
-  palava = this.palava;
-
-  $ = this.$;
 
   palava = this.palava;
 
@@ -1234,7 +1239,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     Session.prototype.init = function(o) {
       this.assignOptions(o);
-      this.checkRequirements();
+      if (!this.checkRequirements()) {
+        return;
+      }
       this.setupRoom();
       return this.userMedia.requestStream();
     };
@@ -1248,9 +1255,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       }
       if (o.identity) {
         this.userMedia = o.identity.newUserMedia();
-        this.roomOptions.ownStatus = {
-          name: o.identity.getName()
-        };
+        this.roomOptions.ownStatus = o.identity.getStatus();
+      }
+      if (o.dataChannels) {
+        this.roomOptions.dataChannels = o.dataChannels;
       }
       if (o.dataChannels) {
         this.roomOptions.dataChannels = o.dataChannels;
@@ -1266,27 +1274,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       var e;
       if (!this.channel) {
         this.emit('argument_error', 'no channel given');
-        return;
+        return false;
       }
       if (!this.userMedia) {
         this.emit('argument_error', 'no user media given');
-        return;
+        return false;
       }
       if (!this.roomId) {
         this.emit('argument_error', 'no room id given');
-        return;
+        return false;
       }
       if (!this.roomOptions.stun) {
         this.emit('argument_error', 'no stun server given');
-        return;
+        return false;
       }
       if (e = palava.browser.checkForWebrtcError()) {
         this.emit('webrtc_no_support', 'WebRTC is not supported by your browser', e);
-        return;
+        return false;
       }
       if (palava.browser.checkForPartialSupport()) {
-        return this.emit('webrtc_partial_support');
+        this.emit('webrtc_partial_support');
+        return true;
       }
+      return true;
     };
 
     Session.prototype.getChannel = function() {
